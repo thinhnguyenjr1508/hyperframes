@@ -2114,7 +2114,13 @@ to your email; that earlier history stays on its own profile. `media-use` links 
 signed-in HeyGen account. Nothing else personal is added, and the opt-outs below
 still turn all of it off.
 
-Turn it all off with `HYPERFRAMES_NO_TELEMETRY=1` or the command above.
+In the TG Dental security-hardened fork, usage telemetry is **disabled by default**.
+It is sent only after an explicit `hyperframes telemetry enable`. The same
+setting covers the CLI and `media-use`; a missing, malformed or non-boolean
+preference is treated as disabled. Disable it again with
+`hyperframes telemetry disable`, `HYPERFRAMES_NO_TELEMETRY=1` or
+`DO_NOT_TRACK=1`. This fork-specific default does not alter the published
+upstream npm package (`npx hyperframes`).
 [Feedback collection](/help#share-feedback) explains the post-render prompt and the
 Studio feedback bar.
 
