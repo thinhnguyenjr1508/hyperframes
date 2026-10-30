@@ -42,9 +42,9 @@ test.after(() => {
   rmSync(home, { recursive: true, force: true });
 });
 
-test("optedOut is false with no config and no opt-out env", () => {
+test("optedOut is true with no config: explicit consent is required", () => {
   writeConfig(null);
-  assert.equal(optedOut(), false);
+  assert.equal(optedOut(), true);
 });
 
 test("optedOut honors telemetryEnabled: false from the shared config", () => {
@@ -57,9 +57,18 @@ test("optedOut is false when the shared config enables telemetry", () => {
   assert.equal(optedOut(), false);
 });
 
-test("optedOut treats an unreadable shared config as no opt-out", () => {
+test("optedOut fails closed when the shared config is unreadable", () => {
   writeConfig("{not json");
-  assert.equal(optedOut(), false);
+  assert.equal(optedOut(), true);
+});
+
+test("optedOut honors all documented truthy privacy env values", () => {
+  writeConfig(JSON.stringify({ telemetryEnabled: true }));
+  for (const value of ["1", "true", "YES", "on"]) {
+    process.env.HYPERFRAMES_NO_TELEMETRY = value;
+    assert.equal(optedOut(), true, value);
+  }
+  delete process.env.HYPERFRAMES_NO_TELEMETRY;
 });
 
 test("optedOut still honors the env opt-outs", () => {
