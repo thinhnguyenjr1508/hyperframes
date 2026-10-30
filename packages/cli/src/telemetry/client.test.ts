@@ -7,15 +7,16 @@ vi.stubEnv("HYPERFRAMES_NO_TELEMETRY", "");
 vi.stubEnv("DO_NOT_TRACK", "");
 
 // Pin config so the queue never touches disk and telemetry is enabled.
-const configRead = vi.hoisted(() => ({ failOnce: false }));
+const configRead = vi.hoisted(() => ({ failOnce: false, enabled: true }));
 vi.mock("./config.js", () => ({
   readConfig: () => {
     if (configRead.failOnce) {
       configRead.failOnce = false;
       throw new Error("EACCES");
     }
-    return { anonymousId: "anon-test-123", telemetryEnabled: true };
+    return { anonymousId: "anon-test-123", telemetryEnabled: configRead.enabled };
   },
+  readConfigFresh: () => ({ anonymousId: "anon-test-123", telemetryEnabled: configRead.enabled }),
   writeConfig: () => {},
   getIdentityPersistence: () => "durable",
   getIdentityWriteOutcome: () => undefined,
@@ -79,6 +80,7 @@ describe("telemetry queue delivery", () => {
   beforeEach(async () => {
     vi.unstubAllGlobals();
     // Drain anything a previous test left behind.
+    configRead.enabled = true;
     vi.stubGlobal(
       "fetch",
       vi.fn(() => Promise.resolve(new Response(""))),
@@ -278,6 +280,22 @@ describe("telemetry queue delivery", () => {
     const batch = sentBatch(succeeding);
     expect(batch).toHaveLength(1);
     expect(batch[0]?.event).toBe("cli_command_result");
+  });
+
+  it("drops queued events when a user opts out before delivery, including exit-time flush", async () => {
+    spawnMock.mockClear();
+    const fetchMock = vi.fn(() => Promise.resolve(new Response("")));
+    vi.stubGlobal("fetch", fetchMock);
+    trackEvent("render_complete", { quality: "draft" });
+    configRead.enabled = false;
+    try {
+      await flush();
+      flushSync();
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(spawnMock).not.toHaveBeenCalled();
+    } finally {
+      configRead.enabled = true;
+    }
   });
 
   it("flushSync hands the queue to a detached child that carries the payload", async () => {
