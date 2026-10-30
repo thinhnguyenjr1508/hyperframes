@@ -455,7 +455,7 @@ function parseDeRouterBreaker(value: unknown): DeRouterBreaker | undefined {
 export interface HyperframesConfig {
   /** Has the user agreed to download the on-device search model? Undefined means never asked. */
   localEmbeddingEnabled?: boolean;
-  /** Whether anonymous telemetry is enabled (default: true in production) */
+  /** Usage telemetry is opt-in by default in this privacy-hardened fork. */
   telemetryEnabled: boolean;
   /** Stable anonymous identifier — no PII, just a random UUID */
   anonymousId: string;
@@ -620,7 +620,7 @@ export function recordRecentRender(id: string, ok: boolean): void {
 }
 
 const DEFAULT_CONFIG: HyperframesConfig = {
-  telemetryEnabled: true,
+  telemetryEnabled: false,
   anonymousId: "",
   telemetryNoticeShown: false,
   commandCount: 0,
@@ -782,7 +782,7 @@ function guardedFields(parsed: Partial<HyperframesConfig>): Partial<HyperframesC
 function materializeConfig(parsed: Partial<HyperframesConfig>): HyperframesConfig {
   return {
     ...passthroughFields(parsed),
-    telemetryEnabled: parsed.telemetryEnabled ?? DEFAULT_CONFIG.telemetryEnabled,
+    telemetryEnabled: parsed.telemetryEnabled === true,
     anonymousId: parsed.anonymousId || randomUUID(),
     telemetryNoticeShown: parsed.telemetryNoticeShown ?? DEFAULT_CONFIG.telemetryNoticeShown,
     commandCount: parsed.commandCount ?? DEFAULT_CONFIG.commandCount,
