@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { POSTHOG_API_KEY } from "./posthogKey.js";
-import { readConfig } from "./config.js";
+import { readConfig, readConfigFresh } from "./config.js";
+import { telemetryRuntimeOverride } from "./policy.js";
 import { hostAnswers } from "../utils/hostAnswers.js";
 
 // This is a public project API key — safe to embed in client-side code.
@@ -96,6 +97,17 @@ function buildPayload(events: readonly QueuedEvent[]): string | null {
   return JSON.stringify({ api_key: POSTHOG_API_KEY, batch });
 }
 
+/** Recheck the persisted choice at delivery, not only at enqueue time. */
+function deliveryAuthorized(): boolean {
+  if (telemetryRuntimeOverride() !== null) return false;
+  try {
+    return readConfigFresh().telemetryEnabled === true;
+  } catch {
+    // An unreadable preference must not become an implicit opt-in.
+    return false;
+  }
+}
+
 let inFlight: Promise<boolean> | undefined;
 
 /**
@@ -126,6 +138,10 @@ export async function flush(): Promise<void> {
 
 /** Whether nothing is left undelivered from what was queued when it started. */
 async function sendQueued(): Promise<boolean> {
+  if (!deliveryAuthorized()) {
+    eventQueue = [];
+    return true;
+  }
   // Copy, not alias — events queued while the request is in flight must not
   // be swept into the "delivered" set below.
   const snapshot = eventQueue.slice();
@@ -133,6 +149,10 @@ async function sendQueued(): Promise<boolean> {
   if (payload == null) return true;
   // Left queued: the exit-time flushSync() sends it from a detached child.
   if (!(await hostAnswers(new URL(POSTHOG_HOST).hostname))) return false;
+  if (!deliveryAuthorized()) {
+    eventQueue = [];
+    return true;
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FLUSH_TIMEOUT_MS);
@@ -166,6 +186,10 @@ async function sendQueued(): Promise<boolean> {
  * so the parent process exits immediately without waiting.
  */
 export function flushSync(): void {
+  if (!deliveryAuthorized()) {
+    eventQueue = [];
+    return;
+  }
   const payload = buildPayload(eventQueue);
   if (payload == null) return;
   eventQueue = [];
