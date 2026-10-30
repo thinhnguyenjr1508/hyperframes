@@ -35,17 +35,23 @@ function posthogHost() {
   return override || POSTHOG_HOST;
 }
 
-/** True when telemetry must NOT be sent (opt-out envs, CI, dev, shared config). */
+const OPT_OUT_VALUES = new Set(["1", "true", "yes", "on"]);
+function privacyOptOutEnabled(value) {
+  return value !== undefined && OPT_OUT_VALUES.has(value.trim().toLowerCase());
+}
+
+/** True unless the user explicitly enabled telemetry and no privacy override applies. */
 export function optedOut() {
   return (
     // `hyperframes telemetry disable` writes telemetryEnabled: false to the
     // shared config; one opt-out must cover the CLI and the media-use scripts.
-    readSharedConfig().telemetryEnabled === false ||
-    process.env.HYPERFRAMES_NO_TELEMETRY === "1" ||
-    process.env.DO_NOT_TRACK === "1" ||
+    readSharedConfig().telemetryEnabled !== true ||
+    privacyOptOutEnabled(process.env.HYPERFRAMES_NO_TELEMETRY) ||
+    privacyOptOutEnabled(process.env.DO_NOT_TRACK) ||
     process.env.CI === "true" ||
     process.env.CI === "1" ||
-    process.env.NODE_ENV === "development"
+    process.env.NODE_ENV === "development" ||
+    process.env.NODE_ENV === "test"
   );
 }
 
@@ -189,6 +195,8 @@ function showTelemetryNotice() {
 }
 
 async function postBatch(batch) {
+  // Recheck at the network boundary in case the preference changed mid-command.
+  if (optedOut()) return;
   try {
     await fetch(`${posthogHost()}/batch/`, {
       method: "POST",
