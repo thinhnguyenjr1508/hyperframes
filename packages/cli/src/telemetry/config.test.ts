@@ -86,9 +86,17 @@ describe("config.ts — readConfig / readConfigFresh / writeConfig (real module,
 
   it("creates a default config with a fresh anonymousId when no file exists", () => {
     const config = readConfig();
-    expect(config.telemetryEnabled).toBe(true);
+    expect(config.telemetryEnabled).toBe(false);
     expect(config.anonymousId).toBeTruthy();
     expect(fsState.files.has(CONFIG_PATH)).toBe(true);
+  });
+
+  it("requires an explicit boolean true before enabling telemetry", () => {
+    const base = readConfig();
+    fsState.files.set(CONFIG_PATH, JSON.stringify({ ...base, telemetryEnabled: "true" }));
+    expect(readConfigFresh().telemetryEnabled).toBe(false);
+    fsState.files.set(CONFIG_PATH, JSON.stringify({ ...base, telemetryEnabled: true }));
+    expect(readConfigFresh().telemetryEnabled).toBe(true);
   });
 
   it("caches the read — a second readConfig() call does not see a file mutated out from under it", () => {
